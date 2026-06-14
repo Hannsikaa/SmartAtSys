@@ -12,6 +12,11 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: result });
 });
 
+export const markBulk = asyncHandler(async (req: Request, res: Response) => {
+  const result = await attendanceService.markAttendanceBulk(req.body);
+  res.status(201).json({ success: true, data: result });
+});
+
 export const getByStudent = asyncHandler(async (req: Request, res: Response) => {
   const records = await attendanceService.getStudentAttendance(Number(req.params.id));
   res.json({ success: true, data: records });

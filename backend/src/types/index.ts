@@ -4,6 +4,7 @@ export interface AuthUser {
   userId: number;
   role: 'student' | 'faculty' | 'admin';
   name: string;
+  email: string;
   department?: string;
   rollNo?: string;
 }
@@ -14,12 +15,14 @@ export interface Student {
   RollNo: string;
   Department: string;
   YearOfStudy: number;
+  Email: string;
 }
 
 export interface Faculty {
   FacultyID: number;
   FacultyName: string;
   Department: string;
+  Email: string;
 }
 
 export interface ClassRecord {

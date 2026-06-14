@@ -1,7 +1,7 @@
 import { getPool, sql } from '../config/db';
 import { NotFoundError } from '../utils/errors';
 import { AttendanceRecord } from '../types';
-import { MarkAttendanceInput, UpdateAttendanceInput } from '../validators/attendance.validator';
+import { MarkAttendanceInput, UpdateAttendanceInput, MarkBulkAttendanceInput } from '../validators/attendance.validator';
 import { predictForStudent } from '../ai/predictor';
 import { createAutoNotification } from './notification.service';
 import { getNextId } from '../utils/dbHelpers';
@@ -65,32 +65,77 @@ export async function updateAttendance(
   return { attendance, prediction };
 }
 
-export async function getStudentAttendance(studentId: number): Promise<AttendanceRecord[]> {
+function formatDate(value: Date | string): string {
+  const d = value instanceof Date ? value : new Date(value);
+  return d.toISOString().slice(0, 10);
+}
+
+function mapAttendanceRow(row: {
+  AttendanceID: number;
+  AttendanceDate: Date;
+  ClassID: number;
+  Status: string;
+  StudentID: number;
+  SubjectName?: string;
+}) {
+  return {
+    attendanceId: row.AttendanceID,
+    date: formatDate(row.AttendanceDate),
+    classId: row.ClassID,
+    status: row.Status,
+    studentId: row.StudentID,
+    ...(row.SubjectName !== undefined ? { subject: row.SubjectName } : {}),
+  };
+}
+
+export async function markAttendanceBulk(
+  input: MarkBulkAttendanceInput
+): Promise<{ count: number; records: Awaited<ReturnType<typeof markAttendance>>[] }> {
+  const results: Awaited<ReturnType<typeof markAttendance>>[] = [];
+
+  for (const record of input.records) {
+    const result = await markAttendance({
+      studentId: record.studentId,
+      classId: input.classId,
+      attendanceDate: input.attendanceDate,
+      status: record.status,
+    });
+    results.push(result);
+  }
+
+  return { count: results.length, records: results };
+}
+
+export async function getStudentAttendance(studentId: number) {
   const pool = await getPool();
 
   const result = await pool
     .request()
     .input('studentId', sql.Int, studentId)
     .query(`
-      SELECT * FROM Attendance
-      WHERE StudentID = @studentId
-      ORDER BY AttendanceDate DESC
+      SELECT a.AttendanceID, a.AttendanceDate, a.ClassID, a.Status, a.StudentID, c.SubjectName
+      FROM Attendance a
+      INNER JOIN Classes c ON a.ClassID = c.ClassID
+      WHERE a.StudentID = @studentId
+      ORDER BY a.AttendanceDate DESC
     `);
 
-  return result.recordset;
+  return result.recordset.map(mapAttendanceRow);
 }
 
-export async function getClassAttendance(classId: number): Promise<AttendanceRecord[]> {
+export async function getClassAttendance(classId: number) {
   const pool = await getPool();
 
   const result = await pool
     .request()
     .input('classId', sql.Int, classId)
     .query(`
-      SELECT * FROM Attendance
-      WHERE ClassID = @classId
-      ORDER BY AttendanceDate DESC, StudentID
+      SELECT a.AttendanceID, a.AttendanceDate, a.ClassID, a.Status, a.StudentID, c.SubjectName
+      FROM Attendance a
+      INNER JOIN Classes c ON a.ClassID = c.ClassID
+      WHERE a.ClassID = @classId
+      ORDER BY a.AttendanceDate DESC, a.StudentID
     `);
 
-  return result.recordset;
+  return result.recordset.map(mapAttendanceRow);
 }

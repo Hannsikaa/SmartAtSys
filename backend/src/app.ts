@@ -11,6 +11,8 @@ import facultyRoutes from './routes/faculty.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import predictionRoutes from './routes/prediction.routes';
 import notificationRoutes from './routes/notification.routes';
+import dashboardRoutes from './routes/dashboard.routes';
+import classesRoutes from './routes/classes.routes';
 import powerbiRoutes from './routes/powerbi.routes';
 
 const app = express();
@@ -29,6 +31,8 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/faculty', facultyRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/classes', classesRoutes);
 app.use('/api/predictions', predictionRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/powerbi', powerbiRoutes);

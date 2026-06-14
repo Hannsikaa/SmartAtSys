@@ -5,13 +5,17 @@ CREATE TABLE Students (
     StudentName VARCHAR(50) NOT NULL,
     RollNo VARCHAR(20) NOT NULL,
     Department VARCHAR(30) NOT NULL,
-    YearOfStudy INT NOT NULL
+    YearOfStudy INT NOT NULL,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    PasswordHash VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE Faculty (
     FacultyID INT PRIMARY KEY,
     FacultyName VARCHAR(50) NOT NULL,
-    Department VARCHAR(30) NOT NULL
+    Department VARCHAR(30) NOT NULL,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    PasswordHash VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE Classes (

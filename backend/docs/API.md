@@ -6,53 +6,34 @@ Related docs:
 - Environment setup: [ENV.md](./ENV.md)
 - Database schema: [../sql/schema.sql](../sql/schema.sql)
 - Demo data: [../sql/seed.sql](../sql/seed.sql)
+- Auth migration (existing DBs): [../sql/migrate_auth.sql](../sql/migrate_auth.sql)
 - Postman collection: [SmartAtSys.postman_collection.json](./SmartAtSys.postman_collection.json)
 
 ---
 
 ## Quick start
 
-1. Backend team applies `schema.sql` then `seed.sql` on Fabric Warehouse.
+1. Backend team applies `schema.sql` then `seed.sql` on Fabric Warehouse (or `migrate_auth.sql` + re-seed on existing DB).
 2. Backend runs `npm run dev` on port 4000.
-3. Frontend runs on `http://localhost:5173` (or update backend `CORS_ORIGIN` in `.env`).
-4. Import Postman collection and test login before building UI.
+3. Frontend (Next.js SAMS) runs on `http://localhost:3000` — backend `CORS_ORIGIN` defaults to this port.
+4. Import Postman collection and test login before wiring UI.
 
 ---
 
 ## Authentication
 
-No password in the current schema. Login uses **roll number** (students) or **faculty ID** (faculty/admin).
+Login uses **email + password** (matches SAMS login screen).
 
-### Login — student
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "role": "student",
-  "rollNo": "CS2024001"
-}
-```
-
-### Login — faculty
+### Login
 
 ```http
 POST /api/auth/login
 Content-Type: application/json
 
 {
-  "role": "faculty",
-  "facultyId": 1
+  "email": "student@university.edu",
+  "password": "password123"
 }
-```
-
-### Login — admin
-
-Same as faculty but with `"role": "admin"`. Faculty ID must be listed in backend `ADMIN_FACULTY_IDS` (default seed: faculty `1`).
-
-```json
-{ "role": "admin", "facultyId": 1 }
 ```
 
 ### Login response
@@ -66,6 +47,7 @@ Same as faculty but with `"role": "admin"`. Faculty ID must be listed in backend
       "userId": 101,
       "role": "student",
       "name": "John Doe",
+      "email": "student@university.edu",
       "department": "Computer Science",
       "rollNo": "CS2024001"
     }
@@ -86,7 +68,88 @@ GET /api/auth/me
 Authorization: Bearer <token>
 ```
 
-Use on app load to restore session and route by `data.role` (`student` | `faculty` | `admin`).
+Use on app load to restore session and route by `data.role`:
+- `student` → `/student`
+- `faculty` → `/faculty`
+- `admin` → `/admin`
+
+---
+
+## Demo credentials (after seed.sql)
+
+Password for all accounts: **`password123`**
+
+| Role | Email | userId |
+|------|-------|--------|
+| Student (72% demo, below threshold) | `student@university.edu` | 101 |
+| Student (healthy) | `student2@university.edu` | 102 |
+| Faculty | `faculty@university.edu` | 1 |
+| Admin | `admin@university.edu` | 2 |
+
+Set `ADMIN_FACULTY_IDS=2` in backend `.env` for admin login.
+
+---
+
+## Dashboard endpoints (SAMS UI)
+
+### Student dashboard — single payload
+
+```http
+GET /api/dashboard/student
+Authorization: Bearer <student-token>
+```
+
+Faculty/admin may pass `?studentId=101`.
+
+```json
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "attendancePercentage": 72,
+      "threshold": 75,
+      "isBelowThreshold": true,
+      "present": 18,
+      "absent": 7,
+      "totalClasses": 25
+    },
+    "history": [
+      {
+        "attendanceId": 25,
+        "date": "2026-03-11",
+        "subject": "Data Structures",
+        "status": "Present"
+      }
+    ],
+    "prediction": {
+      "status": "At Risk",
+      "riskScore": 85,
+      "predictedAttendance": 68
+    }
+  }
+}
+```
+
+### Admin dashboard — summary cards
+
+```http
+GET /api/dashboard/admin
+Authorization: Bearer <admin-token>
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "totalStudents": 2,
+    "attendanceAverage": 82,
+    "riskStudentsCount": 1,
+    "threshold": 75
+  }
+}
+```
+
+Power BI section: call `GET /api/powerbi/embed` separately for `reportUrl`.
 
 ---
 
@@ -116,19 +179,6 @@ Use on app load to restore session and route by `data.role` (`student` | `facult
 
 ---
 
-## Demo credentials (after seed.sql)
-
-| Role | Login body |
-|------|------------|
-| Student (at-risk demo) | `{ "role": "student", "rollNo": "CS2024001" }` → userId `101` |
-| Student (healthy) | `{ "role": "student", "rollNo": "CS2024002" }` → userId `102` |
-| Faculty | `{ "role": "faculty", "facultyId": 1 }` |
-| Admin | `{ "role": "admin", "facultyId": 1 }` |
-
-Demo IDs: Class `1`, Faculty `1`, Students `101` / `102`.
-
----
-
 ## Endpoints
 
 All routes below except `GET /health` and `POST /api/auth/login` require `Authorization: Bearer <token>`.
@@ -143,8 +193,15 @@ All routes below except `GET /health` and `POST /api/auth/login` require `Author
 
 | Method | Path | Auth | Body | Roles |
 |--------|------|------|------|-------|
-| POST | `/api/auth/login` | None | See above | Public |
+| POST | `/api/auth/login` | None | `{ email, password }` | Public |
 | GET | `/api/auth/me` | Bearer | — | All |
+
+### Dashboard
+
+| Method | Path | Auth | Roles |
+|--------|------|------|-------|
+| GET | `/api/dashboard/student` | Bearer | student, faculty, admin |
+| GET | `/api/dashboard/admin` | Bearer | admin |
 
 ### Students
 
@@ -160,11 +217,29 @@ All routes below except `GET /health` and `POST /api/auth/login` require `Author
 | GET | `/api/faculty/:id` | Bearer | faculty, admin |
 | GET | `/api/faculty/:id/classes` | Bearer | faculty, admin |
 
+### Classes
+
+| Method | Path | Auth | Roles |
+|--------|------|------|-------|
+| GET | `/api/classes/:id/students` | Bearer | faculty, admin |
+
+Returns roster for marking attendance:
+
+```json
+{
+  "success": true,
+  "data": [
+    { "studentId": 101, "studentName": "John Doe", "rollNo": "CS2024001" }
+  ]
+}
+```
+
 ### Attendance
 
 | Method | Path | Auth | Roles |
 |--------|------|------|-------|
 | POST | `/api/attendance/mark` | Bearer | faculty, admin |
+| POST | `/api/attendance/mark-bulk` | Bearer | faculty, admin |
 | PUT | `/api/attendance/:id` | Bearer | faculty, admin |
 | GET | `/api/attendance/student/:id` | Bearer | self, faculty, admin |
 | GET | `/api/attendance/class/:id` | Bearer | faculty, admin |
@@ -184,18 +259,33 @@ Content-Type: application/json
 }
 ```
 
+**Mark bulk (full class session)**
+
+```json
+{
+  "classId": 1,
+  "attendanceDate": "2026-06-12",
+  "records": [
+    { "studentId": 101, "status": "Present" },
+    { "studentId": 102, "status": "Absent" }
+  ]
+}
+```
+
 `status` must be `"Present"` or `"Absent"`.  
 `attendanceDate` format: `YYYY-MM-DD`.
 
-Response includes updated attendance row plus AI prediction and may create a notification.
+Attendance list responses include `subject` (from Classes join):
 
-**Update attendance**
-
-```http
-PUT /api/attendance/1
-Content-Type: application/json
-
-{ "status": "Present" }
+```json
+{
+  "attendanceId": 1,
+  "date": "2026-03-05",
+  "classId": 1,
+  "status": "Absent",
+  "studentId": 101,
+  "subject": "Data Structures"
+}
 ```
 
 ### Analytics
@@ -206,50 +296,12 @@ Content-Type: application/json
 | GET | `/api/analytics/class/:id` | Bearer | faculty, admin |
 | GET | `/api/analytics/department/:dept` | Bearer | faculty, admin |
 
-**Student analytics response (example)**
-
-```json
-{
-  "success": true,
-  "data": {
-    "studentId": 101,
-    "studentName": "John Doe",
-    "department": "Computer Science",
-    "present": 6,
-    "absent": 6,
-    "total": 12,
-    "percentage": 50
-  }
-}
-```
-
-**Class analytics** — returns `subjectName`, `department`, and per-student stats.
-
-**Department analytics** — URL-encode department name, e.g. `/api/analytics/department/Computer%20Science`.
-
 ### Predictions (AI)
 
 | Method | Path | Auth | Roles |
 |--------|------|------|-------|
 | GET | `/api/predictions/student/:id` | Bearer | self, faculty, admin |
 | GET | `/api/predictions/all-risk` | Bearer | faculty, admin |
-
-**Prediction response (example)**
-
-```json
-{
-  "success": true,
-  "data": {
-    "studentId": 101,
-    "currentAttendance": 50,
-    "predictedAttendance": 42,
-    "riskScore": 78,
-    "status": "At Risk"
-  }
-}
-```
-
-`status` is `"At Risk"` or `"Safe"`.
 
 ### Notifications
 
@@ -258,134 +310,74 @@ Content-Type: application/json
 | GET | `/api/notifications/:studentId` | Bearer | self, faculty, admin |
 | POST | `/api/notifications/create` | Bearer | admin |
 
-**Create notification (admin)**
-
-```json
-{
-  "studentId": 101,
-  "message": "Custom warning message"
-}
-```
-
-Auto notifications (after mark attendance or nightly job):
-- `"Warning: Attendance likely below 75%"`
-- `"Safe: Attendance healthy"`
-
-### Power BI (optional — Azure embed skipped for now)
+### Power BI (demo — link only, no Azure)
 
 | Method | Path | Auth | Roles |
 |--------|------|------|-------|
 | GET | `/api/powerbi/embed` | Bearer | faculty, admin |
 
-**Link-only mode** (current — no Azure credentials). Set `POWERBI_DASHBOARD_URL` to your Fabric report URL:
-
-```json
-{
-  "success": true,
-  "data": {
-    "mode": "link",
-    "enabled": false,
-    "message": "Azure embed skipped. Open reportUrl in a new browser tab while logged into Microsoft.",
-    "reportUrl": "https://app.fabric.microsoft.com/groups/.../reports/...",
-    "workspaceId": "...",
-    "reportId": "..."
-  }
-}
-```
-
-Frontend: if `data.mode === "link"`, show a button that opens `data.reportUrl` in a new tab.
-
-**Embed mode** (later, when Azure creds exist): `mode: "embed"`, `enabled: true`, includes `accessToken` — use [Power BI JavaScript SDK](https://github.com/microsoft/PowerBI-JavaScript) `embedReport()`.
+Set `POWERBI_DASHBOARD_URL` in backend `.env`. Frontend opens `data.reportUrl` in a new tab.
 
 ---
 
-## Role matrix — which screens use which APIs
+## Role matrix — SAMS screens
 
-| Screen | Student | Faculty | Admin |
-|--------|---------|---------|-------|
-| Login | POST `/api/auth/login` | POST `/api/auth/login` | POST `/api/auth/login` |
-| Session restore | GET `/api/auth/me` | GET `/api/auth/me` | GET `/api/auth/me` |
-| My attendance | GET `/api/attendance/student/:id` | — | — |
-| My analytics | GET `/api/analytics/student/:id` | — | — |
-| My risk | GET `/api/predictions/student/:id` | — | — |
-| My notifications | GET `/api/notifications/:studentId` | — | — |
-| Mark attendance | — | POST `/api/attendance/mark` | POST `/api/attendance/mark` |
-| Class list | — | GET `/api/faculty/:id/classes` | GET `/api/faculty/:id/classes` |
-| Class analytics | — | GET `/api/analytics/class/:id` | GET `/api/analytics/class/:id` |
-| All at-risk | — | GET `/api/predictions/all-risk` | GET `/api/predictions/all-risk` |
-| Student list | — | GET `/api/students` | GET `/api/students` |
-| Power BI report link | — | GET `/api/powerbi/embed` → open `reportUrl` | GET `/api/powerbi/embed` → open `reportUrl` |
-
-Students use their own `userId` from `/api/auth/me` as `:id` / `:studentId`.
-
-Faculty use their own `userId` as `:id` in `/api/faculty/:id/classes`.
+| Screen | Primary API |
+|--------|-------------|
+| Login | `POST /api/auth/login` |
+| Session restore | `GET /api/auth/me` |
+| Student dashboard | `GET /api/dashboard/student` |
+| Admin dashboard cards | `GET /api/dashboard/admin` |
+| Admin Power BI | `GET /api/powerbi/embed` |
+| Faculty — pick class | `GET /api/faculty/:id/classes` |
+| Faculty — student roster | `GET /api/classes/:id/students` |
+| Faculty — save attendance | `POST /api/attendance/mark-bulk` |
 
 ---
 
 ## Frontend implementation notes
 
-**Suggested env (frontend)**
+**Suggested env (Next.js frontend)**
 
 ```env
-VITE_API_URL=http://localhost:4000
+NEXT_PUBLIC_API_URL=http://localhost:4000
 ```
-
-**Axios example**
-
-```typescript
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-```
-
-**Routing**
-
-- After login, read `data.user.role` and redirect:
-  - `student` → `/student/dashboard`
-  - `faculty` → `/faculty/dashboard`
-  - `admin` → `/admin/dashboard` (can reuse faculty views + admin-only actions)
 
 **CORS**
 
-Backend allows origin from `CORS_ORIGIN` (default `http://localhost:5173`). If your dev server uses another port, ask backend team to update `.env`.
+Backend allows origin from `CORS_ORIGIN` (default `http://localhost:3000`).
 
 ---
 
 ## Integration checklist
 
-### Backend team (before handoff)
+### Backend team
 
-- [ ] Fabric warehouse credentials in `.env`
-- [ ] `JWT_SECRET` set (min 8 characters)
-- [ ] Run `sql/schema.sql` then `sql/seed.sql` on warehouse
-- [ ] `npm run check:env` passes
-- [ ] `npm run dev` — `GET /health` returns 200
-- [ ] Postman collection: student login + mark attendance succeed
+- [ ] Run `schema.sql` then `seed.sql` (or `migrate_auth.sql` on existing DB, then re-seed)
+- [ ] Set `JWT_SECRET`, `ADMIN_FACULTY_IDS=2`, `CORS_ORIGIN=http://localhost:3000`
+- [ ] `npm run check:env` and `npm run dev` — `GET /health` returns 200
+- [ ] Postman: student login + `GET /api/dashboard/student` succeed
 
-### Frontend team (after receiving this doc)
+### Frontend team
 
-- [ ] Set `VITE_API_URL=http://localhost:4000`
-- [ ] Implement login → store JWT → attach Bearer header
-- [ ] Call `GET /api/auth/me` on app load
-- [ ] Gate routes by role from `me` response
-- [ ] Build student dashboard (analytics, predictions, notifications, attendance)
-- [ ] Build faculty dashboard (classes, mark attendance, all-risk list)
-- [ ] Confirm CORS port with backend team if not using 5173
+- [ ] Set `NEXT_PUBLIC_API_URL=http://localhost:4000`
+- [ ] Login with email/password → store JWT → attach Bearer header
+- [ ] Route by `user.role` after login
+- [ ] Student page: `GET /api/dashboard/student`
+- [ ] Admin page: `GET /api/dashboard/admin` + `GET /api/powerbi/embed`
+- [ ] Faculty page: classes → roster → `POST /api/attendance/mark-bulk`
 
 ---
 
-## Database setup commands
-
-Run in SSMS / Azure Data Studio against Fabric Warehouse:
+## Database setup
 
 1. Execute [../sql/schema.sql](../sql/schema.sql)
 2. Execute [../sql/seed.sql](../sql/seed.sql)
 
-Then start backend:
+For databases created before auth columns:
+
+3. Execute [../sql/migrate_auth.sql](../sql/migrate_auth.sql)
+4. Re-run [../sql/seed.sql](../sql/seed.sql)
 
 ```powershell
 cd backend

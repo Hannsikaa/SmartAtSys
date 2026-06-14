@@ -29,7 +29,7 @@
       "name": "Auth",
       "item": [
         {
-          "name": "Login — Student (CS2024001)",
+          "name": "Login — Student",
           "event": [
             {
               "listen": "test",
@@ -50,13 +50,13 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"student\",\n  \"rollNo\": \"CS2024001\"\n}"
+              "raw": "{\n  \"email\": \"student@university.edu\",\n  \"password\": \"password123\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/login"
           }
         },
         {
-          "name": "Login — Faculty (ID 1)",
+          "name": "Login — Faculty",
           "event": [
             {
               "listen": "test",
@@ -77,13 +77,13 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"faculty\",\n  \"facultyId\": 1\n}"
+              "raw": "{\n  \"email\": \"faculty@university.edu\",\n  \"password\": \"password123\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/login"
           }
         },
         {
-          "name": "Login — Admin (Faculty ID 1)",
+          "name": "Login — Admin",
           "event": [
             {
               "listen": "test",
@@ -102,7 +102,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"admin\",\n  \"facultyId\": 1\n}"
+              "raw": "{\n  \"email\": \"admin@university.edu\",\n  \"password\": \"password123\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/login"
           }
@@ -113,6 +113,27 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Student Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/dashboard/student"
+          }
+        },
+        {
+          "name": "Admin Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/dashboard/admin"
           }
         }
       ]
@@ -160,6 +181,19 @@
       ]
     },
     {
+      "name": "Classes",
+      "item": [
+        {
+          "name": "Get Class Students (Roster)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/classes/{{classId}}/students"
+          }
+        }
+      ]
+    },
+    {
       "name": "Attendance",
       "item": [
         {
@@ -175,6 +209,21 @@
               "raw": "{\n  \"studentId\": 101,\n  \"classId\": 1,\n  \"attendanceDate\": \"2026-03-10\",\n  \"status\": \"Absent\"\n}"
             },
             "url": "{{baseUrl}}/api/attendance/mark"
+          }
+        },
+        {
+          "name": "Mark Attendance Bulk",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": 1,\n  \"attendanceDate\": \"2026-06-12\",\n  \"records\": [\n    { \"studentId\": 101, \"status\": \"Present\" },\n    { \"studentId\": 102, \"status\": \"Absent\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/attendance/mark-bulk"
           }
         },
         {

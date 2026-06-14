@@ -17,7 +17,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
       userId: payload.userId,
       role: payload.role,
       name: '',
-      rollNo: payload.role === 'student' ? payload.sub : undefined,
+      email: payload.sub,
     };
     next();
   } catch {

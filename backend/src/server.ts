@@ -1,16 +1,12 @@
 import app from './app';
-import { env, isPowerBiEmbedConfigured, isPowerBiLinkConfigured } from './config/env';
+import { env, isPowerBiLinkConfigured } from './config/env';
 import { getPool, closePool } from './config/db';
 import { logger } from './utils/logger';
 import { startAttendanceRiskJob } from './jobs/attendanceRisk.job';
 
 async function bootstrap(): Promise<void> {
-  if (isPowerBiEmbedConfigured()) {
-    logger.info('Power BI embed enabled (Azure credentials configured)');
-  } else if (isPowerBiLinkConfigured()) {
-    logger.info('Power BI link-only mode (Azure skipped — frontend opens report URL in browser)');
-  } else {
-    logger.info('Power BI not configured — core APIs unaffected');
+  if (isPowerBiLinkConfigured()) {
+    logger.info('Power BI demo mode: link-only (open report URL in browser)');
   }
 
   await getPool();

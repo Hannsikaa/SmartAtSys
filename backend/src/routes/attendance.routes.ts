@@ -3,11 +3,18 @@ import * as attendanceController from '../controllers/attendance.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireRole, requireSelfOrRole } from '../middleware/role.middleware';
 import { validate } from '../middleware/validate.middleware';
-import { markAttendanceSchema, updateAttendanceSchema } from '../validators/attendance.validator';
+import { markAttendanceSchema, updateAttendanceSchema, markBulkAttendanceSchema } from '../validators/attendance.validator';
 
 const router = Router();
 
 router.use(authenticate);
+
+router.post(
+  '/mark-bulk',
+  requireRole('faculty', 'admin'),
+  validate(markBulkAttendanceSchema),
+  attendanceController.markBulk
+);
 
 router.post(
   '/mark',

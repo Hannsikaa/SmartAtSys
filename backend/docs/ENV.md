@@ -2,21 +2,18 @@
 
 Copy [`.env.example`](../.env.example) to `.env` and fill in values. Never commit `.env` to git.
 
-**Frontend integration:** See [API.md](./API.md) for endpoints, auth flow, and demo credentials. Apply [../sql/schema.sql](../sql/schema.sql) then [../sql/seed.sql](../sql/seed.sql) on the warehouse before testing. Import [SmartAtSys.postman_collection.json](./SmartAtSys.postman_collection.json) to verify APIs.
+**Frontend integration:** See [API.md](./API.md) for endpoints, auth flow, and demo credentials.  
+**Database setup:** See [DATABASE_SETUP.md](./DATABASE_SETUP.md) — apply [../sql/schema.sql](../sql/schema.sql) then [../sql/seed.sql](../sql/seed.sql).
 
 ## Quick reference
 
 | Priority | Variables | Who provides |
 |----------|-----------|--------------|
 | **Required to start** | `JWT_SECRET`, `FABRIC_WAREHOUSE_SERVER`, `FABRIC_WAREHOUSE_DATABASE`, `FABRIC_WAREHOUSE_USER`, `FABRIC_WAREHOUSE_PASSWORD` | You + DB/Fabric team |
-| **Required for Power BI embed** | `POWERBI_WORKSPACE_ID`, `POWERBI_REPORT_ID`, `POWERBI_CLIENT_ID`, `POWERBI_CLIENT_SECRET`, `POWERBI_TENANT_ID` | Power BI team + Azure admin |
 | **You set** | `JWT_SECRET`, `ADMIN_FACULTY_IDS`, `CORS_ORIGIN` | You |
-| **Safe defaults** | `PORT`, `FABRIC_WAREHOUSE_ENCRYPT`, `FABRIC_WAREHOUSE_TRUST_SERVER_CERT`, `POWERBI_EMBED_URL`, rate limits, `LOG_LEVEL` | Leave as-is |
-| **Optional / unused by code** | `FABRIC_WORKSPACE_ID`, `POWERBI_DASHBOARD_URL` | Teammates (reference only) |
+| **Safe defaults** | `PORT`, `FABRIC_WAREHOUSE_ENCRYPT`, `FABRIC_WAREHOUSE_TRUST_SERVER_CERT`, rate limits, `LOG_LEVEL` | Leave as-is |
 
-You can test **auth, attendance, analytics, AI, and notifications** without any Power BI variables. Power BI link mode only needs `POWERBI_DASHBOARD_URL` (no Azure).
-
-**Azure embed is skipped for now.** When IT provides credentials later, set `POWERBI_CLIENT_ID`, `POWERBI_CLIENT_SECRET`, and `POWERBI_TENANT_ID` for in-app embed.
+Demo: **no Azure client ID**. Optional `POWERBI_DASHBOARD_URL` opens report in browser.
 
 ---
 
@@ -42,7 +39,7 @@ Ask the DB team: *"Fabric Warehouse connection details — server, database name
 |----------|---------|----------------|
 | `PORT` | `4000` | Port 4000 is in use |
 | `NODE_ENV` | `development` | Set `production` when deploying |
-| `CORS_ORIGIN` | `http://localhost:5173` | Frontend runs on a different URL |
+| `CORS_ORIGIN` | `http://localhost:3000` | Frontend runs on a different URL |
 | `JWT_EXPIRES_IN` | `8h` | Optional tuning |
 | `FABRIC_WAREHOUSE_ENCRYPT` | `true` | **Keep `true`** for Fabric Warehouse |
 | `FABRIC_WAREHOUSE_TRUST_SERVER_CERT` | `false` | Set `true` only for local SQL Server dev |
@@ -62,30 +59,15 @@ Ask the DB team: *"Fabric Warehouse connection details — server, database name
 
 ---
 
-## Power BI configuration
-
-### Display values (from Power BI team)
+## Power BI (demo — optional)
 
 | Variable | Purpose |
 |----------|---------|
-| `POWERBI_DASHBOARD_URL` | Browser link to dashboard (informational) |
-| `POWERBI_EMBED_URL` | Base embed URL returned to frontend |
-| `POWERBI_WORKSPACE_ID` | Workspace GUID — required for embed token API |
-| `POWERBI_REPORT_ID` | Report GUID — required for embed token API |
+| `POWERBI_DASHBOARD_URL` | Fabric report link — frontend opens in new tab |
+| `POWERBI_WORKSPACE_ID` | Optional metadata |
+| `POWERBI_REPORT_ID` | Optional metadata |
 
-### Azure credentials (from deployment / Azure admin)
-
-| Variable | Purpose |
-|----------|---------|
-| `POWERBI_CLIENT_ID` | Azure AD app (service principal) ID |
-| `POWERBI_CLIENT_SECRET` | App secret |
-| `POWERBI_TENANT_ID` | Azure AD tenant GUID |
-
-Used by [`src/services/powerbi.service.ts`](../src/services/powerbi.service.ts) to obtain an Azure AD token and call Power BI `GenerateToken`.
-
-Ask the Azure admin: *"Service principal credentials for Power BI embed — Client ID, Client Secret, Tenant ID, with access to our workspace and report."*
-
-`POWERBI_WORKSPACE_ID` and `FABRIC_WORKSPACE_ID` are often the **same GUID**, but only `POWERBI_WORKSPACE_ID` is used by backend code.
+No Azure client ID required. `GET /api/powerbi/embed` returns `reportUrl` only.
 
 ---
 
@@ -98,14 +80,8 @@ Ask the Azure admin: *"Service principal credentials for Power BI embed — Clie
 - Confirm tables exist: `Students`, `Faculty`, `Classes`, `Attendance`, `Notifications`
 
 ### Power BI team
-- Workspace ID (GUID)
-- Report ID (GUID)
-- Dashboard URL (optional)
-
-### Deployment / Azure admin
-- Tenant ID
-- Client ID + Client Secret
-- Service principal access to Power BI workspace
+- Fabric report URL for `POWERBI_DASHBOARD_URL`
+- Workspace ID and Report ID (optional)
 
 ### You (backend dev)
 - `JWT_SECRET`
@@ -121,7 +97,7 @@ Use this when Power BI credentials are not ready yet:
 ```env
 PORT=4000
 NODE_ENV=development
-CORS_ORIGIN=http://localhost:5173
+CORS_ORIGIN=http://localhost:3000
 
 JWT_SECRET=your-own-secret-min-8-chars
 JWT_EXPIRES_IN=8h
@@ -133,24 +109,11 @@ FABRIC_WAREHOUSE_PASSWORD=<from DB team>
 FABRIC_WAREHOUSE_ENCRYPT=true
 FABRIC_WAREHOUSE_TRUST_SERVER_CERT=false
 
-ADMIN_FACULTY_IDS=1
+ADMIN_FACULTY_IDS=2
 LOG_LEVEL=info
-```
 
----
-
-## Full `.env` when Power BI is ready
-
-Add after Azure admin delivers credentials:
-
-```env
-POWERBI_DASHBOARD_URL=https://app.powerbi.com/groups/{workspaceId}/dashboards/{dashboardId}
-POWERBI_EMBED_URL=https://app.powerbi.com/reportEmbed
-POWERBI_WORKSPACE_ID=<from Power BI team>
-POWERBI_REPORT_ID=<from Power BI team>
-POWERBI_CLIENT_ID=<from Azure admin>
-POWERBI_CLIENT_SECRET=<from Azure admin>
-POWERBI_TENANT_ID=<from Azure admin>
+# Optional Power BI demo link
+POWERBI_DASHBOARD_URL=https://app.fabric.microsoft.com/groups/.../reports/...?experience=power-bi
 ```
 
 ---
@@ -164,17 +127,12 @@ POWERBI_TENANT_ID=<from Azure admin>
 - [ ] `FABRIC_WAREHOUSE_USER` — DB team
 - [ ] `FABRIC_WAREHOUSE_PASSWORD` — DB team
 
-**For Power BI embed API:**
-- [ ] `POWERBI_WORKSPACE_ID` — Power BI team
-- [ ] `POWERBI_REPORT_ID` — Power BI team
-- [ ] `POWERBI_CLIENT_ID` — Azure admin
-- [ ] `POWERBI_CLIENT_SECRET` — Azure admin
-- [ ] `POWERBI_TENANT_ID` — Azure admin
+**Optional Power BI demo:**
+- [ ] `POWERBI_DASHBOARD_URL` — open report in browser
 
 **Can leave as defaults:**
 - `FABRIC_WAREHOUSE_ENCRYPT=true`
 - `FABRIC_WAREHOUSE_TRUST_SERVER_CERT=false`
-- `POWERBI_EMBED_URL=https://app.powerbi.com/reportEmbed`
 
 ---
 

@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { getPool, sql } from '../config/db';
 import { signToken } from '../utils/jwt';
 import { UnauthorizedError } from '../utils/errors';
@@ -20,59 +21,64 @@ function getAdminFacultyIds(): number[] {
 
 export async function login(input: LoginInput): Promise<LoginResult> {
   const pool = await getPool();
+  const email = input.email.trim().toLowerCase();
 
-  if (input.role === 'student') {
-    const result = await pool
-      .request()
-      .input('rollNo', sql.VarChar(20), input.rollNo)
-      .query(`
-        SELECT StudentID, StudentName, RollNo, Department
-        FROM Students WHERE RollNo = @rollNo
-      `);
+  const studentResult = await pool
+    .request()
+    .input('email', sql.VarChar(100), email)
+    .query(`
+      SELECT StudentID, StudentName, RollNo, Department, Email, PasswordHash
+      FROM Students WHERE LOWER(Email) = @email
+    `);
 
-    if (result.recordset.length === 0) {
-      throw new UnauthorizedError('Invalid roll number');
+  if (studentResult.recordset.length > 0) {
+    const row = studentResult.recordset[0];
+    const valid = await bcrypt.compare(input.password, row.PasswordHash);
+    if (!valid) {
+      throw new UnauthorizedError('Invalid email or password');
     }
 
-    const row = result.recordset[0];
     const user: AuthUser = {
       userId: row.StudentID,
       role: 'student',
       name: row.StudentName,
+      email: row.Email,
       department: row.Department,
       rollNo: row.RollNo,
     };
 
     return {
-      token: signToken({ userId: user.userId, role: user.role, sub: row.RollNo }),
+      token: signToken({ userId: user.userId, role: user.role, sub: row.Email }),
       user,
     };
   }
 
-  const result = await pool
+  const facultyResult = await pool
     .request()
-    .input('facultyId', sql.Int, input.facultyId)
+    .input('email', sql.VarChar(100), email)
     .query(`
-      SELECT FacultyID, FacultyName, Department
-      FROM Faculty WHERE FacultyID = @facultyId
+      SELECT FacultyID, FacultyName, Department, Email, PasswordHash
+      FROM Faculty WHERE LOWER(Email) = @email
     `);
 
-  if (result.recordset.length === 0) {
-    throw new UnauthorizedError('Invalid faculty ID');
+  if (facultyResult.recordset.length === 0) {
+    throw new UnauthorizedError('Invalid email or password');
   }
 
-  const row = result.recordset[0];
+  const row = facultyResult.recordset[0];
+  const valid = await bcrypt.compare(input.password, row.PasswordHash);
+  if (!valid) {
+    throw new UnauthorizedError('Invalid email or password');
+  }
+
   const adminIds = getAdminFacultyIds();
-  const role = input.role === 'admin' || adminIds.includes(row.FacultyID) ? 'admin' : 'faculty';
-
-  if (input.role === 'admin' && role !== 'admin') {
-    throw new UnauthorizedError('Not authorized as admin');
-  }
+  const role = adminIds.includes(row.FacultyID) ? 'admin' : 'faculty';
 
   const user: AuthUser = {
     userId: row.FacultyID,
     role,
     name: row.FacultyName,
+    email: row.Email,
     department: row.Department,
   };
 
@@ -80,7 +86,7 @@ export async function login(input: LoginInput): Promise<LoginResult> {
     token: signToken({
       userId: user.userId,
       role: user.role,
-      sub: String(row.FacultyID),
+      sub: row.Email,
     }),
     user,
   };
@@ -94,7 +100,7 @@ export async function getMe(userId: number, role: string): Promise<AuthUser> {
       .request()
       .input('userId', sql.Int, userId)
       .query(`
-        SELECT StudentID, StudentName, RollNo, Department
+        SELECT StudentID, StudentName, RollNo, Department, Email
         FROM Students WHERE StudentID = @userId
       `);
 
@@ -107,6 +113,7 @@ export async function getMe(userId: number, role: string): Promise<AuthUser> {
       userId: row.StudentID,
       role: 'student',
       name: row.StudentName,
+      email: row.Email,
       department: row.Department,
       rollNo: row.RollNo,
     };
@@ -116,7 +123,7 @@ export async function getMe(userId: number, role: string): Promise<AuthUser> {
     .request()
     .input('userId', sql.Int, userId)
     .query(`
-      SELECT FacultyID, FacultyName, Department
+      SELECT FacultyID, FacultyName, Department, Email
       FROM Faculty WHERE FacultyID = @userId
     `);
 
@@ -126,12 +133,13 @@ export async function getMe(userId: number, role: string): Promise<AuthUser> {
 
   const row = result.recordset[0];
   const adminIds = getAdminFacultyIds();
-  const resolvedRole = role === 'admin' || adminIds.includes(row.FacultyID) ? 'admin' : 'faculty';
+  const resolvedRole = adminIds.includes(row.FacultyID) ? 'admin' : 'faculty';
 
   return {
     userId: row.FacultyID,
     role: resolvedRole,
     name: row.FacultyName,
+    email: row.Email,
     department: row.Department,
   };
 }

@@ -13,14 +13,17 @@ SmartAtSys/
 
 ## Quick start (backend)
 
+From the **repo root**:
+
 ```powershell
-cd backend
-copy .env.example .env
-# Edit .env: JWT_SECRET + FABRIC_WAREHOUSE_* credentials
-npm install
+copy backend\.env.example backend\.env
+# Edit backend\.env: JWT_SECRET + FABRIC_WAREHOUSE_* credentials
+npm run install:backend
 npm run check:env
 npm run dev
 ```
+
+Or from `backend/` directly: `npm install`, `npm run check:env`, `npm run dev`.
 
 Health check: `GET http://localhost:4000/health`
 
